@@ -5,28 +5,33 @@ import functools
 import json
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-# No longer need to call load_dotenv() here.
-# The script will use the environment variables set by Docker.
+# This is a "singleton" pattern to hold our connection
+_redis_client = None
 
-try:
-    redis_client = redis.from_url(os.getenv("REDIS_URL"))
-    redis_client.ping()
-    print("Successfully connected to Redis.")
-except (redis.exceptions.ConnectionError, ValueError) as e:
-    print(f"Could not connect to Redis: {e}. Caching will be disabled.")
-    redis_client = None
+def get_redis_client():
+    """Creates and reuses a single Redis client connection."""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            redis_url = os.getenv("REDIS_URL")
+            if not redis_url:
+                raise ValueError("REDIS_URL is not set")
+            _redis_client = redis.from_url(redis_url)
+            _redis_client.ping()
+            print("Successfully connected to Redis.")
+        except (redis.exceptions.ConnectionError, ValueError) as e:
+            print(f"Could not connect to Redis: {e}. Caching will be disabled.")
+            _redis_client = None # Ensure it stays None on failure
+    return _redis_client
 
 def cache_result(ttl_seconds=3600):
-    """
-    A decorator to cache the results of a function in Redis.
-    """
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
+            redis_client = get_redis_client() # <-- Get connection here
             if not redis_client:
                 return func(*args, **kwargs)
 
-            # Assumes decorator is used on a class method, skips 'self'
             key_parts = [func.__name__] + list(args[1:]) + sorted(kwargs.items())
             cache_key = json.dumps(key_parts)
 
@@ -44,9 +49,6 @@ def cache_result(ttl_seconds=3600):
     return decorator
 
 def retry_on_failure(func):
-    """
-    A decorator to automatically retry a function on failure.
-    """
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10)
