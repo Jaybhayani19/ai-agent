@@ -34,6 +34,11 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Run Unit Tests
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        REDIS_URL: ${{ secrets.REDIS_URL }}
+        PROJECT_ID: ${{ secrets.PROJECT_ID }}
+        LOCATION: ${{ secrets.LOCATION }}
       run: |
         # This step will run our pytest test
         pytest
