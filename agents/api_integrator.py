@@ -1,4 +1,4 @@
-# agents/code_writer.py
+# agents/api_integrator.py
 from vertexai.generative_models import GenerativeModel
 from db_manager import DBManager
 from executor import run_in_sandbox
@@ -7,19 +7,21 @@ from cache import cache_result, retry_on_failure
 
 logger = get_logger(__name__)
 
-class CodeWriterAgent:
+class APIIntegratorAgent:
     def __init__(self):
         self.db = DBManager()
         self.model = GenerativeModel("gemini-1.5-pro")
-
     @retry_on_failure
     def _generate_code(self, task_description: str) -> str:
         prompt = f"""
-        You are a senior Python developer. Write a complete Python script to accomplish the following task.
-        - The script will be executed in a sandboxed environment with no network access.
-        - All of your logic must be wrapped in a `main()` function.
-        - You must include the standard `if __name__ == "__main__":` block to call the `main()` function.
-        - Only output the raw Python code. Do not add explanations or markdown.
+        You are an expert Python developer specializing in API integration.
+        Write a complete Python script to accomplish the following task.
+        - The script will be executed in a sandboxed environment.
+        - It MUST use the `requests` library for any HTTP calls.
+        - It should handle potential errors and print a clear message if the API call fails.
+        - All logic must be wrapped in a `main()` function, called by a standard
+          `if __name__ == "__main__":` block.
+        - Only output the raw Python code.
 
         Task: "{task_description}"
         """
@@ -35,17 +37,18 @@ class CodeWriterAgent:
         if not task:
             logger.warning("Task not found in DB.", extra={"task_id": task_id})
             return
-
+            
         log_context = {"task_id": task_id, "description": task['description']}
-        logger.info("Executing code writing task.", extra=log_context)
-        
+        logger.info("Executing API task.", extra=log_context)
+
         generated_code = self._generate_code(task['description'])
-        logger.info("Generated code.", extra={"task_id": task_id, "code_length": len(generated_code)})
+        logger.info("Generated code for API task.", extra={"task_id": task_id, "code_length": len(generated_code)})
 
         files = {'main.py': generated_code}
-        command = "python main.py"
-        result = run_in_sandbox(command, files)
-        logger.info("Execution result.", extra={"task_id": task_id, "result": result})
+        command = "pip install -q requests && python main.py"
+        
+        result = run_in_sandbox(command, files, network_enabled=True)
+        logger.info("Execution result for API task.", extra={"task_id": task_id, "result": result})
 
         status = 'completed' if result['exit_code'] == 0 else 'failed'
         output = result['stdout'] if status == 'completed' else result['stderr']

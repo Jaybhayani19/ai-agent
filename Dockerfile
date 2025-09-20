@@ -1,18 +1,18 @@
-# Start from the official Python 3.11 slim image
+# Stage 1: Use the official Python image as a base
 FROM python:3.11-slim
 
-# Pre-install pytest so we don't need to do it at runtime
-RUN pip install pytest pytest-mock
-
-# Set the working directory for our app
+# Set the working directory inside the container
 WORKDIR /app
 
-# Create a non-root user with a UID/GID that we will pass in during the build
-# This is the key to solving the permission issues
-ARG UID=1000
-ARG GID=1000
-RUN groupadd --gid $GID appgroup && \
-    useradd --uid $UID --gid $GID --shell /bin/bash --create-home appuser
+# Copy the file that lists our Python dependencies
+COPY requirements.txt .
 
-# Switch the default user for the container to our new user
-USER appuser
+# Install the dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of our application's code into the container
+COPY . .
+
+# Command to run when the container starts
+# This will execute our main application loop
+CMD ["python", "main.py"]

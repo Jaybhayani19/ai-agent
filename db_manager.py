@@ -31,6 +31,13 @@ class DBManager:
             cur.execute(sql, params)
             return cur.fetchone()
 
+    # --- ADD THIS NEW METHOD ---
+    def query_all(self, sql, params=None):
+        """Executes a SELECT query and returns all results as a list of dictionaries."""
+        with self.conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+
     def __del__(self):
         """Ensures the connection is closed when the object is destroyed."""
         if self.conn:
